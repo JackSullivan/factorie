@@ -14,78 +14,66 @@
 
 package cc.factorie.app.chain
 
+import java.io.FileOutputStream
 import scala.util.Random
 import scala.collection.mutable
 import cc.factorie._
-import cc.factorie.optimize.{OnlineTrainer, LinearMultiClassClassifier}
+import cc.factorie.optimize.{LikelihoodExample, OnlineTrainer}
 import scala.io.Source
 
 object Chain {
   def main(args: Array[String]): Unit = {
+
+    val startTime = System.currentTimeMillis()
+
     object opts extends cc.factorie.util.DefaultCmdOptions {
+
       val writeSequences = new CmdOption("write-sequences", "sequences", "FILE", "Filename in which to save the sequences' labels and features.")
 
-      // provide either these 4
+      // provide either these 3
       val readSequences = new CmdOption("read-sequences", "sequences", "FILE", "Filename from which to read the sequences' labels and features in one-line-per-token format.")
       val trainingPortion = new CmdOption("training-portion", 0.5, "FRACTION", "The fraction of the sequences that should be used for training.  testing-portion is 1.0 - training-portion - validation-portion.")
-      //val validationPortion = new CmdOption("validation-portion", 0.0, "FRACTION", "The fraction of the sequences that should be used for validation") todo YAGNI
       val crossValidation = new CmdOption("cross-validation", 1, "N", "The number of folds for cross-validation (DEFAULT=1)")
 
-      // or these 3
+      // or these 2
       val readTrainingSequences = new CmdOption("read-training-sequences", "sequences", "FILE", "Filename from which to read the training sequences' labels and features.")
-      //val readValidationSequences = new CmdOption("read-validation-sequences", "sequences", "FILE", "Filename from which to read the validation sequences' labels and features.") todo YAGNI
       val readTestingSequences = new CmdOption("read-testing-sequences", "sequences", "FILE", "Filename from which to read the testing sequences' labels and features.")
 
       val readBinaryFeatures = new CmdOption("read-binary-features", true, "true|false", "If true, features will be binary as opposed to counts.  Default is true.")
 
-      /* Probably not necessary - copied from classifier - Jack
-      val readTextFiles = new CmdOption("read-text-files", Seq("textfile"), "FILE.txt...", "Files from which to read sequences; tokens become features; directory name is the label.")
-      val readTextLines = new CmdOption("read-text-lines", "textfile", "FILE.txt", "Filename from which to read the sequences' labels and features; first word is the label value")
-      val readTextTokenSegmenter = new CmdOption("read-text-token-segmenter", "cc.factorie.app.nlp.segment.Tokenizer", "StringSegmenter", "Scala expression providing a subclass of StringSegmenter to turn text into tokens.")
-      val readTextSkipHeader = new CmdOption("read-text-skip-header", false, "true|false", "Skip text up until double newline.")
-      val readTextSkipHTML = new CmdOption("read-text-skip-html", false, "true|false", "Exclude HTML tags.")
-      */
-
       val readTextEncoding = new CmdOption("read-text-encoding", "UTF-8", "ENCODING", "The name of the encoding to use, e.g. UTF-8.")
 
-      val writeSGML = new CmdOption("write-sgml", "output.sgml", "FILE.sgml", "File in which to write the inferred output, with SGML markup.")
-      val writeOWPL = new CmdOption("write-owpl", "output.owpl", "FILE.owpl", "File in which to write the inferred output, with one-word-per-line (e.g. CoNLL-2003 format).")
-
-      /* probably copied from classify - Jack
-      val writeVocabulary = new CmdOption("write-vocabulary", "vocabulary", "FILE", "Filename in which to save the vocabulary.")
-      val readVocabulary = new CmdOption("read-vocabulary", "vocabulary", "FILE", "Filename from which to load the vocabulary.")
-      */
-
-      val writeClassifications = new CmdOption("write-classifications", "classifications", "FILE", "Filename in which to save the classifications.")
+      val writeClassifications = new CmdOption("write-classifications", "classifications", "FILE", "Filename in which to save the classifications.") //todo implement this CLA
 
       val writeChainModel = new CmdOption("write-chain-model", "chain-model", "FILE", "Filename in which to save the chain model.")
-      val readChainModel = new CmdOption("read-chain-model", "chain-model", "FILE", "Filename from which to read the chain model.")
+      val readChainModel = new CmdOption("read-chain-model", "chain-model", "FILE", "Filename from which to read the chain model.") //todo implement this CLA
+
       val localRandomSeed = new CmdOption("random-seed", -1, "N", "The random seed for randomly selecting a proportion of the instance list for training")
 
-      val trainer = new CmdOption("trainer", "ChainLikelihoodTrainer", "ChainTrainer", "Scala expression providing ChainTrainer class.")
+      val trainer = new CmdOption("trainer", "ChainLikelihoodTrainer", "ChainTrainer", "Scala expression providing ChainTrainer class.") //todo implement this CLA
       // TODO Consider enabling the system to use multiple ChainTrainers at the same time, and compare results
 
-      val evaluator = new CmdOption("evaluator", "Trial", "Class()", "The constructor for a ClassifierEvaluator class.")
-      val printInfoGain = new CmdOption("print-infogain", false, "true|false", "Print the training features with highest information gain.")
+      val evaluator = new CmdOption("evaluator", "Trial", "Class()", "The constructor for a ClassifierEvaluator class.") //todo implement this CLA
+      val printInfoGain = new CmdOption("print-infogain", false, "true|false", "Print the training features with highest information gain.") // todo implement and share across this and classify
     }
     opts.parse(args)
 
+    // local random seed
+    implicit val random = new Random(opts.localRandomSeed.value)
 
     object FeaturesDomain extends CategoricalVectorDomain[String]
     object LabelDomain extends CategoricalDomain[String]
 
-
-
     class FeatureChain extends Chain[FeatureChain, Features]
 
-    trait Features extends VectorVar with Observation[Features] with ChainLink[Features, FeatureChain] {
+    trait Features extends CategoricalVectorVar[String] with Observation[Features] with ChainLink[Features, FeatureChain] {
       var label:Label
       val string = "N/A"
-      val domain: VectorDomain = FeaturesDomain
+      override val domain = FeaturesDomain
     }
 
     object Features {
-      def apply(features:Iterable[String], label:Label)(implicit chain:FeatureChain):Features = opts.readBinaryFeatures.value match {
+      def apply(features:Iterable[String], label:Label):Features = opts.readBinaryFeatures.value match {
         case true => new BinaryFeatures(features, label)
         case false => new NonBinaryFeatures(features, label)
       }
@@ -108,36 +96,6 @@ object Chain {
       override def domain = LabelDomain
     }
 
-    /*
-    def fileNametoString(fname:String):String = new File(fname) match {
-      case f if f.exists() && f.isFile => Source.fromFile(f, opts.readTextEncoding.value).mkString
-      case nF => throw new IllegalArgumentException("File " + nF.getName + " does not exist.")
-    }
-    */
-
-
-
-    /*
-    def processInstances(filename:String):Iterable[Label] = Source.fromFile(filename).getLines().map{ line =>
-      line.split("\\s+").toList match {
-        case labelString :: featureStrings => new Label(labelString)
-        case Array("") => {} // indicates an em
-        case _ => throw new Exception("Error in input format") //todo make this error more descriptive
-      }
-    }.toIterable
-
-    def pInst(filename:String) = {
-      val lines:List[String] = Source.fromFile(filename).getLines().toList
-
-      for(idex <- 0 until lines.size;
-        current:String <- lines(idex);
-        nextOpt:Option[String] <- if(lines.size > idex + 1) Some(lines(idex + 1)) else None;
-        prevOpt:Option[String] <- if(0 > idex - 1) None else Some(lines(idex - 1))) {
-
-
-      }
-    }
-    */
     def processInstances(filename:String):Iterable[FeatureChain] = {
       val res = mutable.ArrayBuffer[FeatureChain]()
       Source.fromFile(filename).getLines().toList.map{line =>
@@ -157,59 +115,47 @@ object Chain {
     }
 
 
-    /*
-    def readInstancesFromFilename(filename:String):mutable.ArrayBuffer[Label] = new File(filename) match {
-      case f if f.exists() && f.isFile => {
-        val cubbie = new LabelListCubbie(FeaturesDomain, LabelDomain, opts.readBinaryFeatures.value)
-        BinarySerializer.deserialize(cubbie, f)
-        cubbie.fetch()
+    // todo share across this and classify
+    val (trainingLabels, testingLabels) = if(Seq(opts.readSequences, opts.trainingPortion).map(_.wasInvoked).reduce(_ && _)) {
+      processInstances(opts.readSequences.value) match {
+        case labels if opts.trainingPortion == 1.0 => labels -> Seq()
+        case labels => labels.shuffle.split(opts.trainingPortion.value)
       }
-      case nF => throw new IllegalArgumentException("File " + nF.getName + " does not exist.")
-    }
-    */
-
-    // local random seed
-    implicit val random = new Random(opts.localRandomSeed.value)
-
-    val model = new ChainModel[Label, Features, Features](LabelDomain, FeaturesDomain, _.features, _.token, _.label)
-
-    val trainer = new OnlineTrainer()
-
-
-
-    val trainingLabels = mutable.ArrayBuffer[Label]()
-    val testingLabels = mutable.ArrayBuffer[Label]()
-    val validationLabels = mutable.ArrayBuffer[Label]()
-
-
-    if(Seq(opts.readSequences, opts.trainingPortion, opts.validationPortion).map(_.wasInvoked).reduce(_ && _)) {
-      // read readSeq into features and do training test split
-      val labels = processInstances(opts.readSequences.value)
-      val (trainSet, testAndValidationSet) =
-        if (opts.trainingPortion == 1.0) (labels, Seq(): Seq[Label]) else labels.shuffle.split(opts.trainingPortion.value)
-      val (valSet, testSet) =
-        if (opts.validationPortion.value == 0.0) (Seq(): Seq[Label], testAndValidationSet)
-        else testAndValidationSet.split(opts.validationPortion.value / (1 - opts.trainingPortion.value))
-      trainingLabels ++= trainSet
-      testingLabels ++= testSet
-      validationLabels ++= valSet
-
-    } else if(Seq(opts.readTrainingSequences, opts.readTestingSequences, opts.readValidationSequences).map(_.wasInvoked).reduce(_ && _)) {
-      trainingLabels ++= processInstances(opts.readTrainingSequences.value)
-      testingLabels ++= processInstances(opts.readTestingSequences.value)
-      validationLabels ++= processInstances(opts.readValidationSequences.value)
+    } else if(Seq(opts.readTrainingSequences, opts.readTestingSequences).map(_.wasInvoked).reduce(_ && _)) {
+      processInstances(opts.readTrainingSequences.value) -> processInstances(opts.readTestingSequences.value)
     } else {
       throw new IllegalArgumentException("Check yo args") //todo fix this message
     }
 
-    val classifier:LinearMultiClassClassifier = trainer.train(trainingLabels, trainingLabels.map{_.features})
+    val model = new ChainModel[Label, Features, Features](LabelDomain, FeaturesDomain, _.features, _.token, _.label)
 
-    //val trainer = opts.trainer.value
+    //val examples = trainingLabels.flatMap{_.map{f:Features => new LikelihoodExample(f.label, model, InferByBPChainSum)}}
+    val examples = trainingLabels.map{ fc => new LikelihoodExample(fc.map{f:Features => f.label}, model, InferByBPChainSum)}
+
+    val trainer = new OnlineTrainer(model.parameters)
+
+    trainer.trainFromExamples(examples)
+
+    var totalTokens = 0.0
+    var correctTokens = 0.0
+
+    testingLabels.foreach{ fc =>
+      MaximizeByBPChain.infer(fc.map{f:Features => f.label}, model, null)
+      totalTokens += fc.size
+      correctTokens += HammingObjective.accuracy(fc.map{f:Features => f.label})
+    }
+
+    println("Overall accuracy: " + (correctTokens / totalTokens))
+
+    println("Total elapsed time: " + (System.currentTimeMillis() - startTime) / 1000.0 + "sec")
+
+    // serialize the model
+    if(opts.writeChainModel.wasInvoked) {
+      model.serialize(new FileOutputStream(opts.writeChainModel.value))
+    }
 
 
-
-
-
+    //MaximizeByBPChain.infer(testingLabels.flatMap(_.map{f:Features => f.label}), model, null)
 
   }
 }
