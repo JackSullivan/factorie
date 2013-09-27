@@ -82,7 +82,7 @@ class TestSerialize extends JUnitSuite  with cc.factorie.util.FastLogging{
    model.obs.weights.value:=(Array.fill[Double](model.obs.weights.value.length)(random.nextDouble()))
    model.markov.weights.value:=(Array.fill[Double](model.markov.weights.value.length)(random.nextDouble()))
    logger.debug("serializing chain model")
-   model.serialize(modelFile)
+   model.serialize(new FileOutputStream(modelFile))
 
    val deserialized = deserializeChainModel(modelFile)
 
@@ -121,7 +121,7 @@ class TestSerialize extends JUnitSuite  with cc.factorie.util.FastLogging{
    object MyChainNerFeaturesDomain extends CategoricalVectorDomain[String]
    object OntoNerLabelDomain extends CategoricalDomain[String]
    val model = makeModel(MyChainNerFeaturesDomain, OntoNerLabelDomain)
-   model.deSerialize(fileName)
+   model.deserialize(new FileInputStream(fileName))
    model
  }
 

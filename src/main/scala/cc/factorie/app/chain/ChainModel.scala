@@ -20,12 +20,14 @@ import cc.factorie.la._
 import cc.factorie.optimize._
 import cc.factorie.app.chain.infer._
 import scala.collection.mutable.{ListBuffer,ArrayBuffer}
-import java.io.File
+import java.io._
 import scala.collection.mutable
 import org.junit.Assert._
 import scala.collection.mutable.LinkedHashMap
 import cc.factorie.util.{BinarySerializer, DoubleAccumulator}
 
+
+//TODO We should add the ability to explictly permit and forbid label transitions
 class ChainModel[Label<:LabeledMutableDiscreteVarWithTarget[_], Features<:CategoricalVectorVar[String], Token<:Observation[Token]]
 (val labelDomain:CategoricalDomain[String],
  val featuresDomain:CategoricalVectorDomain[String],
@@ -58,28 +60,21 @@ with Parameters
   }
   var useObsMarkov = false
 
-  def serialize(prefix: String) {
-    val modelFile = new File(prefix + "-model")
-    if (modelFile.getParentFile ne null)
-      modelFile.getParentFile.mkdirs()
-    BinarySerializer.serialize(this, modelFile)
-    val labelDomainFile = new File(prefix + "-labelDomain")
-    BinarySerializer.serialize(labelDomain, labelDomainFile)
-    val featuresDomainFile = new File(prefix + "-featuresDomain")
-    BinarySerializer.serialize(featuresDomain.dimensionDomain, featuresDomainFile)
+  def serialize(stream: OutputStream) {
+    import cc.factorie.util.CubbieConversions._
+    val dstream = new DataOutputStream(stream)
+    BinarySerializer.serialize(featuresDomain, dstream)
+    BinarySerializer.serialize(labelDomain, dstream)
+    BinarySerializer.serialize(this, dstream)
+    dstream.close()
   }
-
-  def deSerialize(prefix: String) {
-    val labelDomainFile = new File(prefix + "-labelDomain")
-    assert(labelDomainFile.exists(), "Trying to load inexistent label domain file: '" + prefix + "-labelDomain'")
-    BinarySerializer.deserialize(labelDomain, labelDomainFile)
-    val featuresDomainFile = new File(prefix + "-featuresDomain")
-    assert(featuresDomainFile.exists(), "Trying to load inexistent label domain file: '" + prefix + "-featuresDomain'")
-    BinarySerializer.deserialize(featuresDomain.dimensionDomain, featuresDomainFile)
-    val modelFile = new File(prefix + "-model")
-    assert(modelFile.exists(), "Trying to load inexisting model file: '" + prefix + "-model'")
-    assertEquals(markov.weights.value.length, labelDomain.length * labelDomain.length)
-    BinarySerializer.deserialize(this, modelFile)
+  def deserialize(stream: InputStream) {
+    import cc.factorie.util.CubbieConversions._
+    val dstream = new DataInputStream(stream)
+    BinarySerializer.deserialize(featuresDomain, dstream)
+    BinarySerializer.deserialize(labelDomain, dstream)
+    BinarySerializer.deserialize(this, dstream)
+    dstream.close()
   }
 
   def factorsWithContext(labels:IndexedSeq[Label]): Iterable[Factor] = {
