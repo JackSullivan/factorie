@@ -4,7 +4,7 @@ import cc.factorie.app.nlp._
 import cc.factorie.app.nlp.pos.PennPosLabel
 import cc.factorie.app.nlp.ner.{NerSpan, NerLabel}
 import scala.collection.mutable.ArrayBuffer
-import cc.factorie.Span
+import cc.factorie.variable.Span
 
 /**
  * User: apassos
@@ -42,7 +42,7 @@ object NerAndPronounMentionFinder extends DocumentAnnotator {
         if ( t.string.length > 2 && !t.containsLowerCase && upperCase.findFirstIn(t.string).nonEmpty && (t.getNext ++ t.getPrev).exists(i => i.containsLowerCase)) {
           spans += ("ORG" -> new TokenSpan(s, t.positionInSection, 1))
         } else if (t.posLabel.categoryValue == "NNP") {
-          spans += ("PER" -> new TokenSpan(s, t.positionInSection, 1))
+          spans += ("MISC" -> new TokenSpan(s, t.positionInSection, 1))
         }
       }
     }
@@ -61,8 +61,8 @@ object NerAndPronounMentionFinder extends DocumentAnnotator {
        "O"
   }
 
-  def process(document: Document) = {
-    val nerMentions = getNerSpans(document).map(labelSpan => {
+  def  getNerMentions(document: Document): Seq[Mention] = {
+    getNerSpans(document).map(labelSpan => {
       val label = labelSpan._1
       val mappedLabel = if(label == "PER") "PERSON" else label    //this is important if you do conll NER, since MentionEntityType expects Ontonotes NER Labels
       val s = labelSpan._2
@@ -71,6 +71,10 @@ object NerAndPronounMentionFinder extends DocumentAnnotator {
       m.attr += new MentionEntityType(m,mappedLabel)
       m
     })
+  }
+
+  def process(document: Document) = {
+    val nerMentions = getNerMentions(document)
     val pronounMentions = getPronounSpans(document).map(s => {
       val m = new Mention(s, 0)
       val label = getMentionEntityTypeLabelForPronoun(m)

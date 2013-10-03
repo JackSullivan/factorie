@@ -16,6 +16,7 @@ package cc.factorie.app.nlp
 import cc.factorie._
 import cc.factorie.util.Attr
 import scala.collection.mutable.ArrayBuffer
+import cc.factorie.variable.Chain
 
 /** A part of a Document, delineated by character offsets into the Document's string,
     and which can hold a sequence of Tokens, a sequence of Sentences and a sequence
@@ -76,7 +77,7 @@ trait Section extends Chain[Section,Token] with DocumentSubstring with Attr {
   def addSentence(s:Sentence): Sentence = {
     if (s.section ne this) throw new Error("Trying to add Sentence to Section to which it does not belong.")
     if (sentences.length > 0 && _sentences.last.end > s.start) throw new Error("Sentences must be added in order and not overlap.")
-    if (s.start+s.length > this.length + 1) throw new Error("Trying to add a Sentence beyond the end of the Section.")
+    if (s.start+s.length > this.length + 1) throw new Error("Trying to add a Sentence beyond the end of the Section. Adding at " + (s.start + s.length) + " instead of " + (this.length + 1))
     _sentences += s; s
   }
   

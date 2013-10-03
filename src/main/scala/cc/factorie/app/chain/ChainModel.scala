@@ -15,33 +15,31 @@
 package cc.factorie.app.chain
 
 import cc.factorie._
-import cc.factorie.maths.ArrayOps
-import cc.factorie.la._
-import cc.factorie.optimize._
-import cc.factorie.app.chain.infer._
+import Factorie._
 import scala.collection.mutable.{ListBuffer,ArrayBuffer}
-import java.io._
-import scala.collection.mutable
-import org.junit.Assert._
-import scala.collection.mutable.LinkedHashMap
-import cc.factorie.util.{BinarySerializer, DoubleAccumulator}
+
+import java.io.{InputStream, OutputStream, DataInputStream, DataOutputStream}
+import cc.factorie.util.BinarySerializer
+import cc.factorie.variable.{CategoricalVectorVar, LabeledMutableDiscreteVarWithTarget}
+import cc.factorie.model.ModelWithContext
+import scala.reflect.ClassTag
 
 
 //TODO We should add the ability to explictly permit and forbid label transitions
-class ChainModel[Label<:LabeledMutableDiscreteVarWithTarget[_], Features<:CategoricalVectorVar[String], Token<:Observation[Token]]
+class ChainModel[Label<:LabeledMutableDiscreteVarWithTarget, Features<:CategoricalVectorVar[String], Token<:Observation[Token]]
 (val labelDomain:CategoricalDomain[String],
  val featuresDomain:CategoricalVectorDomain[String],
  val labelToFeatures:Label=>Features,
  val labelToToken:Label=>Token,
  val tokenToLabel:Token=>Label) 
- (implicit lm:Manifest[Label], fm:Manifest[Features], tm:Manifest[Token])
+ (implicit lm:ClassTag[Label], fm:ClassTag[Features], tm:ClassTag[Token])
 extends ModelWithContext[IndexedSeq[Label]] //with Trainer[ChainModel[Label,Features,Token]]
 with Parameters
 {
   self =>
-  val labelClass = lm.erasure
-  val featureClass = fm.erasure
-  val tokenClass = tm.erasure
+  val labelClass = lm.runtimeClass
+  val featureClass = fm.runtimeClass
+  val tokenClass = tm.runtimeClass
   val bias = new DotFamilyWithStatistics1[Label] {
     factorName = "Label"
     val weights = Weights(new la.DenseTensor1(labelDomain.size))

@@ -16,12 +16,13 @@ package cc.factorie.app.chain
 
 import java.io.FileOutputStream
 import scala.util.Random
-import scala.collection.mutable
 import cc.factorie._
 import cc.factorie.optimize.{LikelihoodExample, OnlineTrainer}
 import cc.factorie.util.DefaultCmdOptions
+import cc.factorie.variable._
 import scala.io.Source
-import scala.annotation.tailrec
+import scala.Some
+import cc.factorie.infer.{InferByBPChain, MaximizeByBPChain}
 
 object ChainOpts extends DefaultCmdOptions {
 
@@ -166,7 +167,7 @@ object Chain {
     val model = new ChainModel[Label, Features, Features](LabelDomain, FeaturesDomain, _.features, _.token, _.label)
 
     //val examples = trainingLabels.flatMap{_.map{f:Features => new LikelihoodExample(f.label, model, InferByBPChainSum)}}
-    val examples = trainingLabels.map{ fc => new LikelihoodExample(fc.map{f:Features => f.label}, model, InferByBPChainSum)}
+    val examples = trainingLabels.map{ fc => new LikelihoodExample(fc.map{f:Features => f.label}, model, InferByBPChain)}
 
     val trainer = new OnlineTrainer(model.parameters, maxIterations = 1)
 
