@@ -119,7 +119,7 @@ object Chain {
         }.toIterable
       }
       src.close()
-      featureChains
+      featureChains.toIterable
     }
 
     // todo share across this and classify
