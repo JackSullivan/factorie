@@ -53,6 +53,14 @@ trait Tensor extends MutableDoubleSeq {
     val denominator:Double = this.twoNorm * t.twoNorm
     if (denominator == 0.0 || denominator != denominator) 0.0 else numerator/denominator
   }
+  def deductedDot(ds:Tensor, deduct:Tensor = this):Double = {
+    this.dot(ds - deduct)
+  }
+  def deductedCosineSimilarity(t:Tensor, deduction:Tensor = this):Double = {
+    val numerator:Double = this.deductedDot(t, deduction)
+    val denominator:Double = this.twoNorm * t.twoNorm
+    if (denominator == 0.0 || denominator != denominator) 0.0 else numerator/denominator
+  }
 
   // TODO: consider removing these because we could be copying an immutable Tensor or an inefficient representation
   def *(v:Double): Tensor = {val c = this.copy; c *= v; c}// TODO Should I use this.copy here?

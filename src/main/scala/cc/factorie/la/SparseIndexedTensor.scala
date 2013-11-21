@@ -183,6 +183,26 @@ trait ArraySparseIndexedTensor extends SparseIndexedTensor {
         dot
     }
   }
+  override def deductedDot(v:Tensor, deduction:Tensor=this):Double = {
+    makeReadable()
+    v match {
+      // todo add implementations for other tensors
+      case v:ArraySparseIndexedTensor => {
+        v._makeReadable()
+        val v1 = if (this.__npos < v.__npos) this else v
+        val v2 = if (v.__npos < this.__npos) v else this
+        var i = 0; var j = -1; var j2 = 0
+        var result = 0.0
+        while (i < v1.__npos) {
+          j2 = v2.position(v1.__indices(i), j+1)
+          if (j2 >= 0) { result += v1.__values(i) * (v2.__values(j2) - v1.__values(i)); j = j2 }
+          i += 1
+        }
+        result
+      }
+      case t: Tensor => super.deductedDot(v, deduction)
+    }
+  }
 
   override def toString = "SparseIndexedTensor npos="+__npos+" sorted="+_sorted+" ind="+__indices.mkString(",")+" val="+__values.mkString(",")
 
