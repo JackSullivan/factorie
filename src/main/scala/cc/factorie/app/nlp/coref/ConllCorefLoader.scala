@@ -41,16 +41,6 @@ object ConllCorefLoader {
       case _ => s
     }
 
-
-  //this returns true if the noun phrase passed in shouln't be added as a mention. We use the
-  //rules from 'Mention Detection: Heuristics for the OntoNotes annotations'
-  def filterMention(phrase: String,parentPhrase: String,prevPhrase: String,prevWord: String): Boolean = {
-    assert(phrase == "NP")
-    val apposition = (prevPhrase == "NP") && (parentPhrase == "NP") && (prevWord == ",")
-    val copular = (parentPhrase == "VP") && copularVerbs.contains(prevWord)  //todo: prevWord has been properly case-normalized, right?
-    apposition || copular
-  }
-
   final val copularVerbs = collection.immutable.HashSet[String]() ++ Seq("is","are","was","'m")
 
   // disperseEntityTypes optionally gives entity type information to all things that are coreferent with something that has entity type annotation
@@ -174,7 +164,7 @@ object ConllCorefLoader {
           for (close <- bracketCloses) {
             val (phrase, start) = parseStack.pop()
             val parentPhrase = if(!parseStack.isEmpty) parseStack(0)._1 else ""
-            if (phrase == "NP" && !filterMention(phrase,parentPhrase,prevPhrase,prevWord)) {
+            if (phrase == "NP") {
               val span = new TokenSpan(currDoc.asSection, start, docTokInd - start + 1)
               val m = new Mention(span, getHeadToken(span))
               currDoc.attr[MentionList] += m
