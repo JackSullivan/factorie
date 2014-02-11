@@ -204,7 +204,7 @@ class SpanVarBuffer[S<:SpanVar[C,E],C<:Chain[C,E],E<:ChainLink[E,C]] extends Arr
     if (d ne null) d += RemoveSpanListDiff(s)
     -=(s)
   }
-  
+
   trait SpanListDiff extends Diff { def list = SpanVarBuffer.this }
   case class AddSpanListDiff(span:S) extends SpanListDiff {
     // Cannot be an AutoDiff, because of initialization ordering 'done' will end up false

@@ -9,11 +9,22 @@ import cc.factorie.variable.{BinaryFeatureVectorVariable, CategoricalVectorDomai
 import cc.factorie.optimize.Trainer
 import cc.factorie.app.classify.backend.LinearMulticlassClassifier
 
+/** A part-of-speech tagger that predicts by greedily labeling each word in sequence.
+    Although it does not use Viterbi, it is surprisingly accurate.  It is also fast.
+    
+    For the Viterbi-based part-of-speech tagger, see ChainPosTagger.  
+    @author Andrew McCallum, */
 class ForwardPosTagger extends DocumentAnnotator {
   // Different ways to load saved parameters
   def this(stream:InputStream) = { this(); deserialize(stream) }
   def this(file: File) = this(new FileInputStream(file))
-  def this(url:java.net.URL) = this(url.openConnection.getInputStream)
+  def this(url:java.net.URL) = {
+    this()
+    val stream = url.openConnection.getInputStream
+    if (stream.available <= 0) throw new Error("Could not open "+url)
+    println("ForwardPosTagger loading from "+url)
+    deserialize(stream)
+  }
   
   object FeatureDomain extends CategoricalVectorDomain[String]
   class FeatureVariable(t:Tensor1) extends BinaryFeatureVectorVariable[String] { def domain = FeatureDomain; set(t)(null) } // Only used for printing diagnostics
@@ -44,38 +55,9 @@ class ForwardPosTagger extends DocumentAnnotator {
     val wordInclusionThreshold = 1
     val sureTokenThreshold = -1		// -1 means don't consider any tokens "sure"
 
-    def computeWordFormsByDocumentFrequencySentences(sentences: Iterable[Sentence], cutoff: Integer) = {
-      val docSize = 1000
-      var begin = 0
-      for(i <- docSize.to(sentences.size).by(docSize)){
-        val docTokens = sentences.slice(begin,i).flatMap(_.tokens)
-        val docUniqueLemmas = docTokens.map(x => lemmatize(x.string).toLowerCase).toSet
-        for(lemma <- docUniqueLemmas){
-          if (!docWordCounts.contains(lemma)) {
-        	docWordCounts(lemma) = 0
-          }
-          docWordCounts(lemma) += 1
-        }
-        begin = i
-      }
-      
-      // deal with last chunk of sentences
-      if(begin < sentences.size){
-    	val docTokens = sentences.slice(begin,sentences.size).flatMap(_.tokens)
-    	val docUniqueLemmas = docTokens.map(x => lemmatize(x.string).toLowerCase).toSet
-    	for(lemma <- docUniqueLemmas){
-    	  if (!docWordCounts.contains(lemma)) {
-    		docWordCounts(lemma) = 0
-    	  }
-    	  docWordCounts(lemma) += 1
-    	}
-      }
-      docWordCounts = docWordCounts.filter(_._2 > cutoff)
-    }
-    
    def computeWordFormsByDocumentFrequency(tokens: Iterable[Token], cutoff: Integer, numToksPerDoc: Int) = {
       var begin = 0
-      for(i <- numToksPerDoc.to(tokens.size).by(numToksPerDoc)){
+      for(i <- numToksPerDoc to tokens.size by numToksPerDoc){
         val docTokens = tokens.slice(begin,i)
         val docUniqueLemmas = docTokens.map(x => lemmatize(x.string).toLowerCase).toSet
         for(lemma <- docUniqueLemmas){
@@ -101,12 +83,6 @@ class ForwardPosTagger extends DocumentAnnotator {
       docWordCounts = docWordCounts.filter(_._2 > cutoff)
     }
     
-    def getLemmas(tokens:Seq[Token]): (IndexedSeq[String],IndexedSeq[String]) = {
-      val simplifiedForms = tokens.map(x => lemmatize(x.string))
-      val lowerSimplifiedForms = simplifiedForms.map(_.toLowerCase)
-      (simplifiedForms.toIndexedSeq, lowerSimplifiedForms.toIndexedSeq)
-    }
-    
     def computeAmbiguityClasses(tokens: Iterable[Token]) = {
       val posCounts = collection.mutable.HashMap[String,Array[Int]]()
       val wordCounts = collection.mutable.HashMap[String,Double]()
@@ -129,10 +105,13 @@ class ForwardPosTagger extends DocumentAnnotator {
         posCounts(lemma)(t.attr[PennPosTag].intValue) += 1
       })
       lemmas.foreach(w => {
-          val posFrequencies = posCounts(w).map(_/wordCounts(w))
-          val bestPosTags = posFrequencies.zip(PennPosDomain.categories).filter(_._1 > ambiguityClassThreshold).unzip._2
-          val ambiguityString = bestPosTags.mkString("_")
-          ambiguityClasses(w) = ambiguityString
+        val posFrequencies = posCounts(w).map(_/wordCounts(w))
+        val bestPosTags = posFrequencies.zip(PennPosDomain.categories).filter(_._1 > ambiguityClassThreshold).unzip._2
+        val ambiguityString = bestPosTags.mkString("_")
+        ambiguityClasses(w) = ambiguityString
+        if (wordCounts(w) >= 1000) {
+          posFrequencies.zipWithIndex.filter(i => i._1 >= 0.999).foreach(c => sureTokens(w) = c._2)
+        }
       })
     }
   }
@@ -285,8 +264,9 @@ class ForwardPosTagger extends DocumentAnnotator {
     for (index <- 0 until tokens.length) {
       val token = tokens(index)
       if (token.attr[PennPosTag] eq null) token.attr += new PennPosTag(token, "NNP")
-      if (WordData.sureTokens.contains(token.string)) {
-        token.attr[PennPosTag].set(WordData.sureTokens(token.string))(null)
+      val l = lemmatize(token.string).toLowerCase
+      if (WordData.sureTokens.contains(l)) {
+        token.attr[PennPosTag].set(WordData.sureTokens(l))(null)
       } else {
         val featureVector = features(token, index, lemmaStrings)
         token.attr[PennPosTag].set(model.classification(featureVector).bestLabelIndex)(null)
@@ -335,7 +315,7 @@ class ForwardPosTagger extends DocumentAnnotator {
   }
   
   def printAccuracy(sentences: Iterable[Sentence], extraText: String) = {
-    var(tokAcc, senAcc, speed, _) = accuracy(sentences)
+    val (tokAcc, senAcc, speed, _) = accuracy(sentences)
     println(extraText + s"$tokAcc token accuracy, $senAcc sentence accuracy, $speed tokens/sec")
   }
   
@@ -384,7 +364,10 @@ class ForwardPosTagger extends DocumentAnnotator {
     FeatureDomain.dimensionDomain.trimBelowCount(cutoff)
     FeatureDomain.freeze()
     println("After pruning using %d features.".format(FeatureDomain.dimensionDomain.size))
-    println("POS1.train\n"+trainSentences(3).tokens.map(_.string).zip(features(trainSentences(3).tokens).map(t => new FeatureVariable(t).toString)).mkString("\n"))
+    
+    /* Print out some features (for debugging) */
+    //println("ForwardPosTagger.train\n"+trainSentences(3).tokens.map(_.string).zip(features(trainSentences(3).tokens).map(t => new FeatureVariable(t).toString)).mkString("\n"))
+    
     def evaluate() {
       exampleSetsToPrediction = doBootstrap
       printAccuracy(trainSentences, "Training: ")
@@ -440,6 +423,7 @@ class ForwardPosOptions extends cc.factorie.util.DefaultCmdOptions with SharedNL
   val saveModel = new CmdOption("save-model", false, "BOOL", "Whether to save the trained model.")
   val runText = new CmdOption("run", "", "FILENAME", "Plain text file on which to run.")
   val numIters = new CmdOption("num-iterations","5","INT","number of passes over the data for training")
+  val wsj = new CmdOption("wsj", false, "BOOL", "Whether the data is WSJ or otherwise (Ontonotes)")
 }
 
 object ForwardPosTester {
@@ -447,9 +431,15 @@ object ForwardPosTester {
 	val opts = new ForwardPosOptions
 	opts.parse(args)
 	assert(opts.testFile.wasInvoked || opts.testDir.wasInvoked || opts.testFiles.wasInvoked)
-	  
-	// load model from file if given, else use default model
-	val pos = if(opts.modelFile.wasInvoked) new ForwardPosTagger(new File(opts.modelFile.value)) else OntonotesForwardPosTagger
+	  	
+	// load model from file if given,
+	// else if the wsj command line param was specified use wsj model,
+	// otherwise ontonotes model
+	val pos = {
+	  if(opts.modelFile.wasInvoked) new ForwardPosTagger(new File(opts.modelFile.value))
+	  else if(opts.wsj.value) WSJForwardPosTagger
+	  else OntonotesForwardPosTagger
+	}
 	
 	assert(!(opts.testDir.wasInvoked && opts.testFiles.wasInvoked))
     var testFileList = Seq(opts.testFile.value)
@@ -460,7 +450,10 @@ object ForwardPosTester {
     }
   
 	val testPortionToTake =  if(opts.testPortion.wasInvoked) opts.testPortion.value else 1.0
-	val testDocs =  testFileList.map(load.LoadOntonotes5.fromFilename(_).head)
+	val testDocs = testFileList.map(fname => {
+	  if(opts.wsj.value) load.LoadWSJMalt.fromFilename(fname).head
+	  else load.LoadOntonotes5.fromFilename(fname).head
+	})
     val testSentencesFull = testDocs.flatMap(_.sentences)
     val testSentences = testSentencesFull.take((testPortionToTake*testSentencesFull.length).floor.toInt)
 
@@ -494,8 +487,14 @@ object ForwardPosTrainer extends HyperparameterMain {
       testFileList =  opts.testFiles.value.split(",")
     }
     
-    val trainDocs = trainFileList.map(load.LoadOntonotes5.fromFilename(_).head)
-    val testDocs =  testFileList.map(load.LoadOntonotes5.fromFilename(_).head)
+    val trainDocs = trainFileList.map(fname => {
+	  if(opts.wsj.value) load.LoadWSJMalt.fromFilename(fname).head
+	  else load.LoadOntonotes5.fromFilename(fname).head
+	})
+    val testDocs = testFileList.map(fname => {
+	  if(opts.wsj.value) load.LoadWSJMalt.fromFilename(fname).head
+	  else load.LoadOntonotes5.fromFilename(fname).head
+	})
 
     //for (d <- trainDocs) println("POS3.train 1 trainDoc.length="+d.length)
     println("Read %d training tokens from %d files.".format(trainDocs.map(_.tokenCount).sum, trainDocs.size))
