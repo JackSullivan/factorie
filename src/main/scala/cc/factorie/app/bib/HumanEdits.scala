@@ -9,7 +9,7 @@ import experiments.DebugDiffList
 import java.io.{PrintWriter, File, BufferedWriter}
 import collection.mutable.{HashMap,HashSet, ArrayBuffer}
 import Utils.random
-import cc.factorie.variable._
+import cc.factorie.variable.{BagOfWordsVariable => _, _}
 import cc.factorie.model.{TupleTemplateWithStatistics3, Model, Factor}
 import scala.Some
 

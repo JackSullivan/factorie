@@ -1,26 +1,20 @@
 package cc.factorie.app.bib
-import cc.factorie.app.bib.parser._
+
 import cc.factorie._
 import cc.factorie.app.bib.experiments._
-import cc.factorie.util.DefaultCmdOptions
 import app.nlp.hcoref._
 import db.mongo._
 import com.mongodb.{MongoClient, DB, Mongo}
 import collection.mutable.{Queue,LinkedList,HashSet, HashMap, LinkedHashMap, ArrayBuffer}
-import javax.xml.parsers.{DocumentBuilder, DocumentBuilderFactory}
-import la.DenseTensor
 import cc.factorie.optimize._
 import org.w3c.dom.{Node, NodeList, Document}
 import scala.concurrent.ops._
 import java.io._
 import java.text.DecimalFormat
-import scala.Some
 import scala.language.reflectiveCalls
 import Utils.random
-import cc.factorie.variable._
+import cc.factorie.variable.{BagOfWordsVariable => _, _}
 import cc.factorie.model._
-import scala.Some
-import scala.Some
 import cc.factorie.infer.Proposal
 
 trait BibEntity{
