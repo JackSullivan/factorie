@@ -86,7 +86,7 @@ class GrowableSparseHashTensor1(val sizeProxy:Iterable[Any]) extends Tensor1 wit
 
   def dim1: Int = sizeProxy.size
 
-  def apply(i: Int): Double = h(i)
+  def apply(i: Int): Double = h.getOrElse(i, 0.0)
 
   def foreachActiveElement(f: (Int, Double) => Unit): Unit = h.filter{case (_, value) => value != 0.0} foreach f.tupled
 }
