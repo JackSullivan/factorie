@@ -242,8 +242,6 @@ trait NodeVariables[Self <: NodeVariables[Self]] extends SelfVariable[Self] {
   def getVariables: Seq[Var]
   def size:Int = getVariables.size
 
-  def nameString:String
-
   class NodeVariableDiff extends Diff {
     def variable:Self = _nv
 
