@@ -27,48 +27,22 @@ abstract class ChildParentTemplate[Vars <: NodeVariables[Vars]](initWeights:Tens
   def weights: Weights = _weights
 }
 
-class BagOfWordsEntropy[Vars <:NodeVariables[Vars], T <: TensorVar](initialWeight:Double, getBag:(Vars => T))(implicit ct:ClassTag[Vars], params:Parameters)
-  extends Template2[Node[Vars]#Exists, Vars]
-  with DotFamily2[Node[Vars]#Exists, Vars]
-  with DebugableTemplate {
+class ChildParentCosineDistance[Vars <: NodeVariables[Vars]](weight:Double, shift: Double, getBag:(Vars => OldBagOfWordsVariable))(implicit c:ClassTag[Vars], p:Parameters) extends ChildParentTemplate[Vars](Tensor1(weight)) with DebugableTemplate {
+  override def name: String = "ChildParentCosineDistance: %s".format(getBag)
 
+  override def statistics(v1: (Node[Vars], Node[Vars]), child: Vars, parent: Vars): Tensor = {
+    val childBag = getBag(child)
+    val parentBag = getBag(parent)
+    val v = childBag.value.cosineSimilarity(parentBag.value, childBag.value) + shift
 
-  def name: String = "BagOfWordsEntropy"
-
-  val _weights = params.Weights(Tensor1(initialWeight))
-  def weights: Weights = _weights
-
-  def unroll1(v: Node[Vars]#Exists) = Factor(v, v.node.variables)
-
-  def unroll2(v: Vars) = Factor(v.node.existsVar, v)
-
-  override def statistics(exists: Node[Vars]#Exists#Value, vars: Vars#Value) = {
-    val bag = getBag(vars).value
-    var entropy = 0.0
-    var n = 0.0
-    if(exists.booleanValue /*&& isEntity.booleanValue*/){
-      val l1Norm = bag.oneNorm
-      bag.foreachActiveElement{ case(k,v) =>
-        entropy -= (v/l1Norm)*math.log(v/l1Norm)
-        n+=1.0
-      }
+    if(_debug) {
+      println(debug(v*weight))
     }
-    if(n>1)entropy /= scala.math.log(n) //normalized entropy in [0,1]
-    if(entropy.isNaN) {
-      println("Warning entropy is NaN!")
-      println("n=:" + n)
-      println("active size: %d\tone norm: %.4f\t".format(bag.activeDomainSize, bag.oneNorm))
-      bag.foreachActiveElement{ case (index, value) =>
-        println("index:%d\tvalue:%.4f\t(value/oneNorm):%.4f\tlog(value/oneNorm:%.4f".format(index, value, value/bag.oneNorm, math.log(value/bag.oneNorm)))
-      }
-    }
-    entropy = -entropy
-    if(_debug)println("  "+debug(entropy))
-    new RealValue(entropy)
+    new RealValue(v)
   }
 }
 
-class OldBagOfWordsEntropy[Vars <:NodeVariables[Vars]](initialWeight:Double, getBag:(Vars => OldBagOfWordsVariable))(implicit ct:ClassTag[Vars], params:Parameters)
+class BagOfWordsEntropy[Vars <:NodeVariables[Vars]](initialWeight:Double, getBag:(Vars => OldBagOfWordsVariable))(implicit ct:ClassTag[Vars], params:Parameters)
   extends Template2[Node[Vars]#Exists, Vars]
   with DotFamily2[Node[Vars]#Exists, Vars]
   with DebugableTemplate {

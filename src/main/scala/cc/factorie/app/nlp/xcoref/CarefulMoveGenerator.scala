@@ -10,65 +10,33 @@ import scala.collection.mutable
 trait CarefulMoveGenerator[Vars <: NodeVariables[Vars], N <: Node[Vars]]  extends MoveGenerator[Vars, N]{
   this :SettingsSampler[(N, N)] =>
 
-  protected def expandedContext(context: (N, N)): Iterable[(N, N)] = {
-    val (one, two) = context
-    one.lineage.map(_.asInstanceOf[N] -> two)
-    /*
-    val (left, right) = if(one.mentionCountVar.value < two.mentionCountVar.value) { // the left node is the smaller
-      one -> two
-    } else if(one.mentionCountVar.value > two.mentionCountVar.value) {
-      two -> one
-    } else if(one.depth > two.depth) { // failing that the left node should be deeper
-      one -> two
-    } else {
-      two -> one
-    }
-    right.lineage.map(left -> _.asInstanceOf[N])
-    */
-
-  }
+  protected def expandedContext(context: (N, N)): Iterable[(N, N)] = Vector(context)
 
   def moves: IndexedSeq[Move[N]] = Vector.empty[Move[N]]
 
-  override def settings(context: (N, N)): SettingIterator = new SettingIterator {
-    val (e1, e2) = context
-    val expanded = expandedContext(context)
-    val moves = mutable.ArrayBuffer[DiffList => Unit]()
+  override def settings(c:(N, N)) = new SettingIterator with MoveSettingIterator[Vars, N] {
+    val (e1, e2) = c
 
+    val moves = new scala.collection.mutable.ArrayBuffer[Move[N]]()
 
-    def next(d: DiffList): DiffList = ???
-
-    def hasNext: Boolean = ???
-
-    def reset(): Unit = ???
-  }
-  /*
-  override def settings(context: (N, N)): SettingIterator = new SettingIterator {
-    val (e1, e2) = context
-    val expanded = expandedContext(context)
-    val moveList = if(e1.root != e2.root) {
-      expanded.map { case (left, right) =>
-        if(!right.isMention) {
-          Move.mergeLeft[Vars, N](right,left)
-        } else { // if right is a mention, then left is also a mention
-          Move.mergeUp[Vars, N](right, left, {d:DiffList => newInstance(d)})
+    if(e1.root != e2.root) {
+      if(e1.isMention && e1.isRoot && e2.isMention && e2.isRoot) {
+        moves += new MergeUp[Vars, N](e1, e2)({d => newInstance(d)})
+      } else {
+        if(e1.mentionCountVar.value > e2.mentionCountVar.value) {
+          moves += new MergeLeft[Vars, N](e1, e2)
+        } else {
+          moves += new MergeLeft[Vars, N](e2, e1)
         }
-      }.toVector
+      }
     } else {
-      Vector(Move.splitRight[Vars, N](expanded.head._1, expanded.head._2))
+      if(e1.mentionCountVar.value > e2.mentionCountVar.value) {
+        moves += new SplitRight[Vars, N](e2, e1)
+      } else {
+        moves += new SplitRight[Vars, N](e1, e2)
+      }
     }
 
-    var index = 0
-    def next(priorDiff: DiffList): DiffList = {
-      val diff = moveList(index).apply(newDiffList)
-      index += 1
-      //println("Composed difflist of length %s" format diff.size)
-      diff
-    }
-
-    def hasNext: Boolean = index <= moves.size
-
-    def reset() {index = 0}
+    moves += new NoMove[Vars, N]
   }
-  */
 }

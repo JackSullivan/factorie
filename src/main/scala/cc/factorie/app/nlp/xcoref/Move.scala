@@ -55,6 +55,8 @@ trait MoveGenerator[Vars <: NodeVariables[Vars], N<:Node[Vars]]  {
 trait Move[N <: Node[_]] {
   def name: String
 
+  def perform(d:DiffList):Unit
+
   def isSymmetric(node1:N, node2:N): Boolean // is the move symmetric for this pair of nodes?
 
   def isValid(node1: N, node2:N): Boolean
@@ -113,35 +115,10 @@ trait ParentCheckingMovingGenerator[Vars <: NodeVariables[Vars], N <: Node[Vars]
   }
 }
 
-/*
-trait ParentCheckingMoveGenerator[Vars <: NodeVariables[Vars], N <: Node[Vars]] extends MoveGenerator[Vars, N] {
-  this:SettingsSampler[(N,N)] =>
-  override protected def expandedContext(context: (N, N)): Iterable[(N, N)] = {
-    val (n1, n2) = context
-    n1.lineage.map(_.asInstanceOf[N] -> n2) ++ n2.lineage.map(_.asInstanceOf[N] -> n1)
-  }
-}
-*/
-/*
-trait ParentCheckingMoveGenerator[Vars <: NodeVariables[Vars], N <: Node[Vars]] extends DefaultMoveGenerator[Vars, N] {
-
-  override def generate(n1: N, n2: N): Iterator[DiffList] = new Iterator[DiffList] {
-    val movePairs = n1.lineage.map(_ -> n2) ++ n2.lineage.map(_ -> n1)
-    val proposals = movePairs.flatMap { case(nV1, nV2) =>
-      val n1 = nV1.asInstanceOf[N]
-      val n2 = nV2.asInstanceOf[N]
-      moves.flatMap(_.apply(n1,n2)) ++ moves.filterNot(_.isSymmetric(n1, n2)).flatMap(_.apply(n2,n1))
-    }.toIterator
-
-
-    def hasNext: Boolean = proposals.hasNext
-
-    def next(): DiffList = proposals.next()
-  }
-}
-*/
 class NoMove[Vars <: NodeVariables[Vars], N <: Node[Vars]] extends Move[N] {
   def name = "No Move"
+
+  def perform(d:DiffList) = Unit
 
   def isSymmetric(node1: N, node2: N): Boolean = true
 
@@ -151,7 +128,14 @@ class NoMove[Vars <: NodeVariables[Vars], N <: Node[Vars]] extends Move[N] {
   }
 }
 
-class MergeLeft[Vars <: NodeVariables[Vars], N <: Node[Vars]] extends Move[N]{
+class MergeLeft[Vars <: NodeVariables[Vars], N <: Node[Vars]](val left:N, val right:N) extends Move[N]{
+
+  def this() = this(null.asInstanceOf[N], null.asInstanceOf[N])
+
+  def perform(d:DiffList) {
+    operation(right, left)(d)
+  }
+
   def name = "Merge Left"
   def isValid(right: N, left: N) = right.root != left.root && !left.isMention && left.mentionCountVar.value >= right.mentionCountVar.value
   def isSymmetric(node1: N, node2: N): Boolean = false
@@ -162,7 +146,14 @@ class MergeLeft[Vars <: NodeVariables[Vars], N <: Node[Vars]] extends Move[N]{
   }
 }
 
-class SplitRight[Vars <: NodeVariables[Vars], N <: Node[Vars]] extends Move[N] {
+class SplitRight[Vars <: NodeVariables[Vars], N <: Node[Vars]](val left:N, val right:N) extends Move[N] {
+
+  def this() = this(null.asInstanceOf[N], null.asInstanceOf[N])
+
+  def perform(d:DiffList) {
+    operation(right, left)(d)
+  }
+
   def name = "Split Right"
   def isValid(right: N, left: N): Boolean = left.root == right.root && right.mentionCountVar.value >= left.mentionCountVar.value
   def isSymmetric(node1: N, node2: N): Boolean = false
@@ -173,8 +164,15 @@ class SplitRight[Vars <: NodeVariables[Vars], N <: Node[Vars]] extends Move[N] {
   }
 }
 
-class MergeUp[Vars <: NodeVariables[Vars], N <: Node[Vars]](newInstance:(DiffList => N)) extends Move[N] {
-  def name = "Merge up"
+class MergeUp[Vars <: NodeVariables[Vars], N <: Node[Vars]](val left:N, val right:N)(newInstance:(DiffList => N)) extends Move[N] {
+
+  def this(newInstance:(DiffList => N)) = this(null.asInstanceOf[N], null.asInstanceOf[N])(newInstance)
+
+  def perform(d:DiffList) {
+    operation(right, left)(d)
+  }
+
+  def name = "Merge Up"
   def isValid(right: N, left: N): Boolean = left.root != right.root && (left.isRoot && right.isRoot) && (left.isMention && right.isMention)
   def isSymmetric(node1: N, node2: N): Boolean = true
 
