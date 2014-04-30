@@ -2,181 +2,138 @@ package cc.factorie.app.nlp.xcoref
 
 import cc.factorie.variable.{SettingIterator, DiffList}
 import cc.factorie.infer.SettingsSampler
-import scala.collection.mutable
 
 /**
  * User: escher, John Sullivan, akobren
  * Date: 10/28/13
  *
  */
-trait MoveGenerator[Vars <: NodeVariables[Vars], N<:Node[Vars]]  {
+trait MoveSettingIterator[Vars <: NodeVariables[Vars]] extends SettingIterator{
+  def moves:IndexedSeq[Move[Vars]]
 
-  this: SettingsSampler[(N, N)] =>
+  var i = 0
 
-  def newInstance(implicit d:DiffList):N
-
-
-  def settings(context: (N, N)): SettingIterator = new SettingIterator {
-    private val proposals:Iterable[DiffList => DiffList] = expandedContext(context).flatMap{ case(n1, n2) =>
-      moves.flatMap{ move =>
-        if(move.isValid(n1, n2)) List(move(n1,n2)(_)) else Nil ++ (if(!move.isSymmetric(n1,n2)&&move.isValid(n2,n1)) List(move(n2, n1)(_)) else Nil)
-      }
-    }
-    private val moveObjs = expandedContext(context).flatMap{ case(n1, n2) =>
-      moves.flatMap{ move =>
-        if(move.isValid(n1, n2)) List(move) else Nil ++ (if(!move.isSymmetric(n1,n2)&&move.isValid(n2,n1)) List(move) else Nil)
-      }
-    }
-    //println("With a context of size: %d, we generated these moves:".format(expandedContext(context).size), moveObjs.groupBy(_.name).mapValues(_.size))
-
-    if(proposals.size == 1) {
-      println("WARNING: Only 1 move was generated!!")
-      val (n1, n2) = context
-      println("n1 is a mention: %s, n1 is a root: %s".format(n1.isMention, n1.isRoot))
-      println("n2 is a mention: %s, n2 is a root: %s".format(n2.isMention, n2.isRoot))
-      println("n1 and n2 share a parent: %s".format(n1.root == n2.root))
-    }
-
-    private var proposalsIter = proposals.toIterator
-
-    def next(d: DiffList): DiffList = proposalsIter.next()(d)
-
-    def hasNext: Boolean = proposalsIter.hasNext
-
-    def reset() {
-      proposalsIter = proposals.toIterator
-    }
-  }
-
-  protected def expandedContext(context:(N, N)):Iterable[(N,N)]
-  def moves: IndexedSeq[Move[N]]
+  def hasNext = i < moves.size
+  def next(diff:DiffList) = {val d = newDiffList; moves(i).perform(d); i += 1; d}
+  def reset = i = 0
 }
 
-trait Move[N <: Node[_]] {
+
+trait MoveGenerator[Vars <: NodeVariables[Vars]]  {
+
+  this: SettingsSampler[(Node[Vars], Node[Vars])] =>
+
+  def newInstance(implicit d:DiffList):Node[Vars]
+}
+
+trait Move[Vars <: NodeVariables[Vars]] {
+
   def name: String
 
   def perform(d:DiffList):Unit
 
-  def isSymmetric(node1:N, node2:N): Boolean // is the move symmetric for this pair of nodes?
+  def isSymmetric(node1:Node[Vars], node2:Node[Vars]): Boolean // is the move symmetric for this pair of nodes?
 
-  def isValid(node1: N, node2:N): Boolean
-  def operation(node1: N, node2:N)(d:DiffList): DiffList
-  final def apply(node1:N, node2:N)(d:DiffList):DiffList = Option(d) match {
+  def isValid(node1: Node[Vars], node2:Node[Vars]): Boolean
+  def operation(node1: Node[Vars], node2:Node[Vars])(d:DiffList): DiffList
+  final def apply(node1:Node[Vars], node2:Node[Vars])(d:DiffList):DiffList = Option(d) match {
     case Some(diff) => operation(node1, node2)(diff)
     case None => operation(node1, node2)(new DiffList)
   }
 }
-
-object Move {
-  def splitRight[Vars <: NodeVariables[Vars], N <: Node[Vars]](right:N, left:N):(DiffList => DiffList) = {
-    val m = new SplitRight[Vars, N]
-    assert(m.isValid(right, left))
-    m.operation(right, left)
-  }
-  def mergeLeft[Vars <: NodeVariables[Vars], N <: Node[Vars]](right:N, left:N):(DiffList => DiffList) = {
-    val m = new MergeLeft[Vars, N]
-    assert(m.isValid(left, right))
-    m.operation(left, right)
-  }
-  def mergeUp[Vars <: NodeVariables[Vars], N <: Node[Vars]](right:N, left:N, newInstance:(DiffList => N)):(DiffList => DiffList) = {
-    val m = new MergeUp[Vars, N](newInstance)
-    assert(m.isValid(right, left))
-    m.operation(right, left)
-  }
-}
-
-trait DefaultMoveGenerator[Vars <: NodeVariables[Vars], N <: Node[Vars]] extends MoveGenerator[Vars, N] {
-  this: SettingsSampler[(N,N)] =>
-  val moves = IndexedSeq(new NoMove[Vars, N], new MergeLeft[Vars, N], new SplitRight[Vars, N], new MergeUp[Vars, N]({d:DiffList => this.newInstance(d)}))
+/*
+trait DefaultMoveGenerator[Vars <: NodeVariables[Vars]] extends MoveGenerator[Vars] {
+  this: SettingsSampler[(Node[Vars], Node[Vars])] =>
+  val moves = IndexedSeq(new NoMove[Vars], new MergeLeft[Vars], new SplitRight[Vars], new MergeUp[Vars]({d:DiffList => this.newInstance(d)}))
 
   @inline
-  protected def expandedContext(context: (N, N)): Iterable[(N, N)] = List(context)
+  protected def expandedContext(context: (Node[Vars], Node[Vars])): Iterable[(Node[Vars], Node[Vars])] = List(context)
 }
 
-trait RootCheckingMoveGenerator[Vars <: NodeVariables[Vars], N <: Node[Vars]] extends MoveGenerator[Vars, N] {
-  this: SettingsSampler[(N, N)] =>
-  override protected def expandedContext(context: (N, N)): Iterable[(N, N)] = {
+trait RootCheckingMoveGenerator[Vars <: NodeVariables[Vars]] extends MoveGenerator[Vars] {
+  this: SettingsSampler[(Node[Vars], Node[Vars])] =>
+  override protected def expandedContext(context: (Node[Vars], Node[Vars])): Iterable[(Node[Vars], Node[Vars])] = {
     val (n1, n2) = context
     val r1 = n1.root; val r2 = n2.root
-    val l = new mutable.ArrayBuffer[(N,N)](3)
-    if(r1 != n1) l += r1.asInstanceOf[N] -> n2
-    if(r2 != n2) l += r2.asInstanceOf[N] -> n1
+    val l = new mutable.ArrayBuffer[(Node[Vars], Node[Vars])](3)
+    if(r1 != n1) l += r1 -> n2
+    if(r2 != n2) l += r2 -> n1
     l += context
     l
   }
 }
 
-trait ParentCheckingMovingGenerator[Vars <: NodeVariables[Vars], N <: Node[Vars]] extends MoveGenerator[Vars, N] {
-  this: SettingsSampler[(N, N)] =>
+trait ParentCheckingMovingGenerator[Vars <: NodeVariables[Vars]] extends MoveGenerator[Vars] {
+  this: SettingsSampler[(Node[Vars], Node[Vars])] =>
 
-  override protected def expandedContext(context: (N, N)): Iterable[(N, N)] = {
+  override protected def expandedContext(context: (Node[Vars], Node[Vars])): Iterable[(Node[Vars], Node[Vars])] = {
     val (n1, n2) = context
-    List(n1 -> n2, n1.root.asInstanceOf[N] -> n2.root.asInstanceOf[N]) ++ n1.lineage.map(_.asInstanceOf[N] -> n2.asInstanceOf[N]) //++ n2.lineage.map(_.asInstanceOf[N] -> n1.asInstanceOf[N])
+    List(n1 -> n2, n1.root -> n2.root) ++ n1.lineage.map(_ -> n2) //++ n2.lineage.map(_.asInstanceOf[N] -> n1.asInstanceOf[N])
   }
 }
-
-class NoMove[Vars <: NodeVariables[Vars], N <: Node[Vars]] extends Move[N] {
+*/
+class NoMove[Vars <: NodeVariables[Vars]] extends Move[Vars] {
   def name = "No Move"
 
   def perform(d:DiffList) = Unit
 
-  def isSymmetric(node1: N, node2: N): Boolean = true
+  def isSymmetric(node1: Node[Vars], node2: Node[Vars]): Boolean = true
 
-  def isValid(node1: N, node2: N): Boolean = true
-  def operation(node1: N, node2: N)(d:DiffList) = {
+  def isValid(node1: Node[Vars], node2: Node[Vars]): Boolean = true
+  def operation(node1: Node[Vars], node2: Node[Vars])(d:DiffList) = {
     d
   }
 }
 
-class MergeLeft[Vars <: NodeVariables[Vars], N <: Node[Vars]](val left:N, val right:N) extends Move[N]{
+class MergeLeft[Vars <: NodeVariables[Vars]](val left:Node[Vars], val right:Node[Vars]) extends Move[Vars] {
 
-  def this() = this(null.asInstanceOf[N], null.asInstanceOf[N])
+  def this() = this(null.asInstanceOf[Node[Vars]], null.asInstanceOf[Node[Vars]])
 
   def perform(d:DiffList) {
     operation(right, left)(d)
   }
 
   def name = "Merge Left"
-  def isValid(right: N, left: N) = right.root != left.root && !left.isMention && left.mentionCountVar.value >= right.mentionCountVar.value
-  def isSymmetric(node1: N, node2: N): Boolean = false
+  def isValid(right: Node[Vars], left: Node[Vars]) = right.root != left.root && !left.isMention && left.mentionCountVar.value >= right.mentionCountVar.value
+  def isSymmetric(node1: Node[Vars], node2: Node[Vars]): Boolean = false
 
-  def operation(right: N, left: N)(d:DiffList) = {
+  def operation(right: Node[Vars], left: Node[Vars])(d:DiffList) = {
     right.alterParent(Option(left))(d)
     d
   }
 }
 
-class SplitRight[Vars <: NodeVariables[Vars], N <: Node[Vars]](val left:N, val right:N) extends Move[N] {
+class SplitRight[Vars <: NodeVariables[Vars]](val left:Node[Vars], val right:Node[Vars]) extends Move[Vars] {
 
-  def this() = this(null.asInstanceOf[N], null.asInstanceOf[N])
+  def this() = this(null.asInstanceOf[Node[Vars]], null.asInstanceOf[Node[Vars]])
 
   def perform(d:DiffList) {
     operation(right, left)(d)
   }
 
   def name = "Split Right"
-  def isValid(right: N, left: N): Boolean = left.root == right.root && right.mentionCountVar.value >= left.mentionCountVar.value
-  def isSymmetric(node1: N, node2: N): Boolean = false
+  def isValid(right: Node[Vars], left: Node[Vars]): Boolean = left.root == right.root && right.mentionCountVar.value >= left.mentionCountVar.value
+  def isSymmetric(node1: Node[Vars], node2: Node[Vars]): Boolean = false
 
-  def operation(right:N, left: N)(d:DiffList) = {
+  def operation(right:Node[Vars], left: Node[Vars])(d:DiffList) = {
     right.alterParent(None)(d)
     d
   }
 }
 
-class MergeUp[Vars <: NodeVariables[Vars], N <: Node[Vars]](val left:N, val right:N)(newInstance:(DiffList => N)) extends Move[N] {
+class MergeUp[Vars <: NodeVariables[Vars]](val left:Node[Vars], val right:Node[Vars])(newInstance:(DiffList => Node[Vars])) extends Move[Vars] {
 
-  def this(newInstance:(DiffList => N)) = this(null.asInstanceOf[N], null.asInstanceOf[N])(newInstance)
+  def this(newInstance:(DiffList => Node[Vars])) = this(null.asInstanceOf[Node[Vars]], null.asInstanceOf[Node[Vars]])(newInstance)
 
   def perform(d:DiffList) {
     operation(right, left)(d)
   }
 
   def name = "Merge Up"
-  def isValid(right: N, left: N): Boolean = left.root != right.root && (left.isRoot && right.isRoot) && (left.isMention && right.isMention)
-  def isSymmetric(node1: N, node2: N): Boolean = true
+  def isValid(right: Node[Vars], left: Node[Vars]): Boolean = left.root != right.root && (left.isRoot && right.isRoot) && (left.isMention && right.isMention)
+  def isSymmetric(node1: Node[Vars], node2: Node[Vars]): Boolean = true
 
-  def operation(right: N, left: N)(d:DiffList) = {
+  def operation(right: Node[Vars], left: Node[Vars])(d:DiffList) = {
     val newParent = newInstance(d)
     right.alterParent(Some(newParent))(d)
     left.alterParent(Some(newParent))(d)

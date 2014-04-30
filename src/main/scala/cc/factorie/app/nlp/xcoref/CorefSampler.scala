@@ -9,21 +9,16 @@ import cc.factorie.util.Hooks1
  * Date: 10/28/13
  */
 
-abstract class CorefSampler[Vars <: NodeVariables[Vars], N <: Node[Vars]](model:CorefModel[Vars], val mentions:Iterable[N], val iterations:Int)(implicit override val random:Random)
-  extends SettingsSampler[(N, N)](model) {
-  this: ContextGenerator[N, (N, N)] with MoveGenerator[Vars, N] =>
+abstract class CorefSampler[Vars <: NodeVariables[Vars]](model:CorefModel[Vars], val mentions:Iterable[Node[Vars]], val iterations:Int)(implicit override val random:Random)
+  extends SettingsSampler[(Node[Vars], Node[Vars])](model) {
+  this: PairContextGenerator[Vars] with MoveGenerator[Vars] =>
 
   this.temperature = 0.001
 
   //if we accepted a diff where Node#Exists variables were false at the end, we mark those nodes for deletion
-  proposalHooks += {proposal:Proposal[(N, N)] =>
-
-    proposal.diff.variables.collect{case e:Node[Vars]#Exists if !e.booleanValue => e.node.markForDeletion}
-    //if (totalProps > 5000 && proposal.modelScore <= 0){
-    //  println("PICKED: " + proposal.modelScore)
-    //}
-
-  }
+  //proposalHooks += {proposal:Proposal[(Node[Vars], Node[Vars])] =>
+  //  proposal.diff.variables.collect{case e:Node[Vars]#Exists if !e.booleanValue => e.node.markForDeletion}
+  //}
 
   val beforeInferHooks = new Hooks1[Unit]
   protected def beforeInferHook = beforeInferHooks()

@@ -94,6 +94,21 @@ NC<:NodeCubbie[Vars, N]](val names:Seq[String], mongoDB:DB)(implicit ct: ClassTa
     case (w,d) => newBOWCubbie.store(nodeId, w, d)
   }
 
+  val WikiTitleExtractor1 = """.+?/wiki/(.+)""".r
+  val WikiTitleExtractor2 = """.+?/\.\.\./(.+)""".r
+  val WikiTitleExtractor3 = """.+?/(.+)""".r
+
+  def getTitleFromWikiURL(wikiUrl: String): String = {
+    val name = wikiUrl match {
+      case WikiTitleExtractor1(name) => name
+      case WikiTitleExtractor2(name) => name
+      case WikiTitleExtractor3(name) => name
+      case "" => ""
+      case _ => throw new Error("cannot extract wikititle from " + wikiUrl)
+    }
+    name.replaceAll("_", " ")
+  }
+
   def loadAll: Seq[N] = {
     val node2ParentId = mutable.HashMap[N, String]()
     val id2Node       = mutable.HashMap[String, N]()
@@ -108,7 +123,7 @@ NC<:NodeCubbie[Vars, N]](val names:Seq[String], mongoDB:DB)(implicit ct: ClassTa
           }
           bag
         })
-        val v = newNodeVars(nc.wikiUrl.value, vars:_*)
+        val v = newNodeVars(getTitleFromWikiURL(nc.wikiUrl.value), vars:_*)
         val n = newNode(v,nc)
         id2Node += nc.id.toString -> n
         if(nc.parentRef.isDefined){

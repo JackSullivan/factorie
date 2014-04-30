@@ -15,7 +15,10 @@ object HierCorefDemo {
   /*
     This is the vars class that stores all of the variables compared in coreference sampling.
    */
-  class WikiCorefVars(val names:BagOfWordsVariable, val context:BagOfWordsVariable, val mentions:BagOfWordsVariable, val truth:String = null) extends NodeVariables[WikiCorefVars] {
+  class WikiCorefVars(val names:BagOfWordsVariable, val context:BagOfWordsVariable, val mentions:BagOfWordsVariable, val truth:String = null) extends NodeVariables[WikiCorefVars] with Canopy {
+
+
+    override def canopies: Seq[String] = names.iterator.toList.map(_._1)
 
     def this(n:Map[String, Double], c:Map[String, Double], m:Map[String, Double]) = this(new BagOfWordsVariable(Nil, n), new BagOfWordsVariable(Nil, c), new BagOfWordsVariable(Nil, m))
     def this()(implicit d:DiffList) = this(new BagOfWordsVariable(), new BagOfWordsVariable(), new BagOfWordsVariable())
@@ -70,19 +73,19 @@ object HierCorefDemo {
     this += new ChildParentCosineDistance(2.0, -0.25, {w:WikiCorefVars => w.names}) {this.debugOff()}
     this += new ChildParentCosineDistance(2.0, -0.25, {w:WikiCorefVars => w.context}) {this.debugOff()}
     this += new ChildParentCosineDistance(2.0, -0.25, {w:WikiCorefVars => w.mentions}) {this.debugOff()}
-    this += new BagOfWordsEntropy(0.25, {w:WikiCorefVars => w.names}) {this.debugOff()}
+    this += new OldBagOfWordsEntropy(0.25, {w:WikiCorefVars => w.names}) {this.debugOff()}
   }
 
   /*
     Code to load mentions from Mongo
    */
-  class HcorefNodeCubbie extends NodeCubbie[WikiCorefVars, Node[WikiCorefVars] with Persistence with NodeStringCanopization] {
+  class HcorefNodeCubbie extends NodeCubbie[WikiCorefVars, Node[WikiCorefVars] with Persistence] {
 
     def newNodeCubbie: HcorefNodeCubbie = new HcorefNodeCubbie()
   }
 
   class HcorefCubbieCollection(names: Seq[String], mongoDB: DB)
-    extends MongoNodeCollection[WikiCorefVars, Node[WikiCorefVars] with Persistence with NodeStringCanopization, HcorefNodeCubbie](names, mongoDB) {
+    extends MongoNodeCollection[WikiCorefVars, Node[WikiCorefVars] with Persistence, HcorefNodeCubbie](names, mongoDB) {
 
     protected def newBOWCubbie = new BOWCubbie()
 
@@ -98,20 +101,12 @@ object HierCorefDemo {
 
     protected def newNode(v: WikiCorefVars, nc: HcorefNodeCubbie) = {
       if (nc.isMention.value) {
-        new Mention[WikiCorefVars](v, nc.id.toString)(null) with Persistence with NodeStringCanopization {
-
-          def canopyIds: Set[String] = nc.canopies.value.toSet
-
+        new Mention[WikiCorefVars](v, nc.id.toString)(null) with Persistence {
           protected val loadedFromDb = true
         }
       }
       else {
-        new Node[WikiCorefVars](v, nc.id.toString)(null) with Persistence with NodeStringCanopization {
-
-          def canopyIds: Set[String] = this.leaves.collect {
-            case leaf: Mention[WikiCorefVars] with NodeStringCanopization => leaf.canopyIds
-          }.flatten.toSet
-
+        new Node[WikiCorefVars](v, nc.id.toString)(null) with Persistence {
           protected val loadedFromDb = true
         }
       }
@@ -134,11 +129,8 @@ object HierCorefDemo {
     val model = new WikiCorefModel
     val numSamples = 20000
 
-    val sampler = new HierarchicalCorefSampler[WikiCorefVars, Node[WikiCorefVars] with NodeStringCanopization](model, mentions, numSamples) {
-      override def newInstance(implicit d: DiffList): Node[WikiCorefVars] with NodeStringCanopization = new Node[WikiCorefVars](new WikiCorefVars) with NodeStringCanopization {
-
-        def canopyIds: Set[String] = Set.empty[String]
-      }
+    val sampler = new HierarchicalCorefSampler[WikiCorefVars](model, mentions, numSamples) {
+      override def newInstance(implicit d: DiffList): Node[WikiCorefVars] = new Node[WikiCorefVars](new WikiCorefVars)
     }
 
     sampler.infer

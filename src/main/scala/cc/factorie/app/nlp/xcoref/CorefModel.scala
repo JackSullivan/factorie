@@ -1,15 +1,15 @@
 package cc.factorie.app.nlp.xcoref
 
 import cc.factorie.model.TupleTemplateWithStatistics3
+import cc.factorie._
 import cc.factorie.app.nlp.hcoref.DebugableTemplate
 import cc.factorie.variable.BooleanValue
-import cc.factorie._
 
 /**
  * @author John Sullivan
  */
 abstract class CorefModel[Vars <: NodeVariables[Vars]] extends TemplateModel with Parameters { // This is to ensure that the model's features' NodeVariables match the type of the model's NodeVariables
-  implicit val params:Parameters = this
+implicit val params:Parameters = this
 
   this += new StructuralPrior[Vars]() {this.debugOff()}
 }

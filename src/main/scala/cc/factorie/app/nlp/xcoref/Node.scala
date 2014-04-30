@@ -73,6 +73,7 @@ class Node[Vars <: NodeVariables[Vars]](val variables:Vars, val id: String)(impl
   def children = childrenVar.value
   def isMention = isMentionVar.booleanValue
   def isRoot = isRootVar.booleanValue
+  def exists = existsVar.booleanValue
 
   def descendents:Iterable[Node[Vars]] = {
     this.children ++ this.children.collect {
@@ -230,7 +231,7 @@ class Mention[Vars <: NodeVariables[Vars]](v:Vars, id: String)(implicit d:DiffLi
 
 trait NodeVariables[Self <: NodeVariables[Self]] extends SelfVariable[Self] {
 
-  _nv: Self =>
+  this: Self =>
 
   var node:Node[Self] = null
 
@@ -242,13 +243,7 @@ trait NodeVariables[Self <: NodeVariables[Self]] extends SelfVariable[Self] {
   def getVariables: Seq[Var]
   def size:Int = getVariables.size
 
-  class NodeVariableDiff extends Diff {
-    def variable:Self = _nv
-
-    def redo() = Unit
-
-    def undo() = Unit
-  }
+  def nameString:String
 }
 
 trait Persistence {
@@ -272,18 +267,27 @@ object Persistence {
   private val deleted = new mutable.HashSet[Node[_]]()
 }
 
-trait NodeCubbie[Vars <: NodeVariables[Vars], N  <: Node[Vars] with Persistence] extends Cubbie {
+trait NodeSource {
+  def source:String
+  def moveable:Boolean
+
+  def useable:Boolean = source != "wp" && moveable
+}
+
+trait NodeCubbie[Vars <: NodeVariables[Vars], N  <: Node[Vars]] extends Cubbie {
 //  type NVC <: Cubbie
   val parentRef = RefSlot("parentRef", () => newNodeCubbie)
   val isMention = BooleanSlot("isMention")
   val wikiUrl = StringSlot("wurl")
   val canopies = StringListSlot("canopies")
+  val moveable = BooleanSlot("mv")
+  val source = StringSlot("src")
 //  protected var _nodeVarsCubbie: Option[NVC] = None
 
 //  def nodeVarsCubbie = _nodeVarsCubbie
 
-  def newNode(v: Vars, id:String)    = new Node(v,id)(null) with Persistence{ protected val loadedFromDb = true }
-  def newMention(v: Vars, id:String) = new Mention(v,id)(null) with Persistence { protected val loadedFromDb = true }
+  def newNode(v: Vars, id:String)    = new Node(v,id)(null) { protected val loadedFromDb = true }
+  def newMention(v: Vars, id:String) = new Mention(v,id)(null) { protected val loadedFromDb = true }
 
   def newNodeCubbie : NodeCubbie[Vars, N]
 
