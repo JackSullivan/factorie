@@ -12,7 +12,8 @@
    limitations under the License. */
 
 package cc.factorie.la
-import cc.factorie._
+
+import cc.factorie
 import cc.factorie.util._
 
 trait Tensor3 extends Tensor {
@@ -66,8 +67,34 @@ trait DenseTensorLike3 extends Tensor3 with DenseTensor {
   }
 }
 class DenseTensor3(val dim1:Int, val dim2:Int, val dim3:Int) extends DenseTensorLike3 {
+  def this(d1:Int, d2:Int, d3:Int, values:Array[Double]) = {this(d1, d2, d3); System.arraycopy(values, 0, _values, 0, values.length); this}
   override def copy = { val t = new DenseTensor3(dim1, dim2, dim3); System.arraycopy(_values, 0, t._values, 0, length); t }
   override def blankCopy = new DenseTensor3(dim1, dim2, dim3)
+}
+
+object DenseTensor3 {
+  val DENSE_TENSOR_3:Byte = 0x03
+  implicit object DenseTensor3Ser extends BytePackable[DenseTensor3] {
+    import BytePackable._
+    def pack(e: factorie.DenseTensor3) = Array(DENSE_TENSOR_3) ++ IntSer.pack(e.dim1) ++ IntSer.pack(e.dim2) ++ IntSer.pack(e.dim3) ++ DoublesSer.pack(e.asArray)
+    def unpack(data: Array[Byte], s: Int) = {
+      require(data(s) == DENSE_TENSOR_3)
+      var off = s + 1
+      val t1 = IntSer.unpack(data, off)
+      val dim1 = t1._1
+      off = t1._2
+      val t2 = IntSer.unpack(data, off)
+      val dim2 = t2._1
+      val t3 = IntSer.unpack(data, off)
+      val dim3 = t3._1
+      off = t3._2
+      val t4 = DoublesSer.unpack(data, off)
+      val arr = t4._1
+      off = t4._2
+      val dt = new DenseTensor3(dim1, dim2, dim3, arr)
+      dt -> off
+    }
+  }
 }
 
 class GrowableDenseTensor3(d1:Int, d2:Int, d3:Int) extends { private var _dim1 = d1; private var _dim2 = d2; private var _dim3 = d3} with DenseTensorLike3 {

@@ -147,7 +147,29 @@ trait ReadOnlyTensor extends Tensor {
 }
 
 object Tensor {
-  
+
+  implicit object TensorSer extends BytePackable[Tensor] {
+    def pack(e: Tensor) = e.getClass match {
+      case c if c == classOf[DenseTensor1] =>
+        DenseTensor1.DenseTensor1Ser.pack(e.asInstanceOf[DenseTensor1])
+      case c if c == classOf[DenseTensor2] =>
+        DenseTensor2.DenseTensor2Ser.pack(e.asInstanceOf[DenseTensor2])
+      case c if c == classOf[DenseTensor3] =>
+        DenseTensor3.DenseTensor3Ser.pack(e.asInstanceOf[DenseTensor3])
+      case otw => throw new IllegalArgumentException(s"${otw.getName} is not supported by BytePackable")
+    }
+
+    def unpack(data: Array[Byte], start: Int) = data(start) match {
+      case DenseTensor1.DENSE_TENSOR_1 =>
+        DenseTensor1.DenseTensor1Ser.unpack(data, start)
+      case DenseTensor2.DENSE_TENSOR_2 =>
+        DenseTensor2.DenseTensor2Ser.unpack(data, start)
+      case DenseTensor3.DENSE_TENSOR_3 =>
+        DenseTensor3.DenseTensor3Ser.unpack(data, start)
+      case otw => throw new IllegalArgumentException("unrecognized Tensor byte: " + otw)
+    }
+  }
+
   def tabulate(dim1:Int)(f:Int=>Double): DenseTensor1 = {
     val t = new DenseTensor1(dim1)
     var i = 0

@@ -13,6 +13,7 @@
 package cc.factorie.model
 
 import cc.factorie.la._
+import cc.factorie.util.BytePackable
 import scala.collection.mutable
 import cc.factorie.variable.TensorVar
 import cc.factorie._
@@ -197,4 +198,23 @@ class WeightsSetCubbie(val ws: WeightsSet) extends Cubbie {
     def get(key: String): Option[Any] = key.toIntSafe.flatMap(i => ws.tensors.indexSafe(i))
     def iterator: Iterator[(String, Any)] = ws.tensors.zipWithIndex.map({case (t, i) => i.toString -> t}).iterator
   })
+}
+
+object WeightsSet {
+  implicit object WSSer extends BytePackable[WeightsSet] {
+    import BytePackable._
+    def pack(e: WeightsSet) = IntSer.pack(e.tensors.size) ++ e.tensors.flatMap(Tensor.TensorSer.pack)
+    def unpack(data: Array[Byte], start: Int) = {
+      var off = start
+      val (size, o1) = IntSer.unpack(data, start)
+      off = o1
+      val ws = new WeightsSet
+      (0 until size).foreach { _ =>
+        val (t, nOff) = Tensor.TensorSer.unpack(data, off)
+        off = nOff
+        ws.newWeights(t)
+      }
+      ws -> off
+    }
+  }
 }

@@ -12,6 +12,8 @@
    limitations under the License. */
 
 package cc.factorie.la
+
+import cc.factorie
 import cc.factorie._
 import cc.factorie.util._
 
@@ -103,6 +105,19 @@ class DenseTensor1(val dim1:Int) extends DenseTensorLike1 {
     val b = t.asArray
     val len = length; var i = 0; while (i < len) { a(i) *= b(i); i += 1 }
     result
+  }
+}
+
+object DenseTensor1 {
+  val DENSE_TENSOR_1:Byte = 0x01
+  implicit object DenseTensor1Ser extends BytePackable[DenseTensor1] {
+    def pack(e: DenseTensor1) = Array(DENSE_TENSOR_1) ++ BytePackable.DoublesSer.pack(e.asArray)
+    def unpack(data: Array[Byte], s: Int) = {
+      require(data(s) == DENSE_TENSOR_1, s"Expected $DENSE_TENSOR_1 found ${data(s)}")
+      val start = s + 1
+      val (arr, off) = BytePackable.DoublesSer.unpack(data, start)
+      new DenseTensor1(arr) -> off
+    }
   }
 }
 // TODO Consider something like the following for Scala 2.10:

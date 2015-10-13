@@ -183,6 +183,7 @@ class DenseTensor2(val dim1:Int, val dim2:Int) extends DenseTensorLike2 {
   def this(values:Seq[Seq[Double]]) = { this(values.size, values.head.size); for (i <- 0 until dim1; j <- 0 until dim2) update(i, j, values(i)(j)) } // TODO Not very efficient
   def this(values:Array[Array[Double]]) = { this(values.size, values.head.size); for (i <- 0 until dim1; j <- 0 until dim2) update(i, j, values(i)(j)) } // TODO Not very efficient
   def this(dim1:Int, dim2:Int, fillValue:Double) = { this(dim1, dim2); java.util.Arrays.fill(_values, fillValue) }
+  def this(dim1:Int, dim2:Int, values:Array[Double]) = {this(dim1, dim2); System.arraycopy(values, 0, _values, 0, values.length); this}
   override def copy: DenseTensor2 = { val t = new DenseTensor2(dim1, dim2); System.arraycopy(_values, 0, t._values, 0, length); t }
   override def blankCopy: DenseTensor2 = new DenseTensor2(dim1, dim2)
   override def stringPrefix = "DenseTensor2"
@@ -297,6 +298,30 @@ class DenseTensor2(val dim1:Int, val dim2:Int) extends DenseTensorLike2 {
         super.leftMultiply(t)
     }
     res
+  }
+}
+
+object DenseTensor2 {
+  val DENSE_TENSOR_2:Byte = 0x02
+  implicit object DenseTensor2Ser extends BytePackable[DenseTensor2] {
+    import BytePackable._
+    def pack(e: DenseTensor2) = Array(DENSE_TENSOR_2) ++ IntSer.pack(e.dim1) ++ IntSer.pack(e.dim2) ++ DoublesSer.pack(e.asArray)
+
+    def unpack(data: Array[Byte], s: Int) = {
+      require(data(s) == DENSE_TENSOR_2)
+      var off = s + 1
+      val t1 = IntSer.unpack(data, off)
+      val dim1 = t1._1
+      off = t1._2
+      val t2 = IntSer.unpack(data, off)
+      val dim2 = t2._1
+      off = t2._2
+      val t3 = DoublesSer.unpack(data, off)
+      val arr = t3._1
+      off = t3._2
+      val dt = new DenseTensor2(dim1, dim2, arr)
+      dt -> off
+    }
   }
 }
 

@@ -16,7 +16,7 @@ package cc.factorie.variable
 import scala.collection.mutable
 import java.io._
 import java.util.zip.{GZIPOutputStream, GZIPInputStream}
-import cc.factorie.util.{JavaHashMap, Cubbie}
+import cc.factorie.util.{BytePackable, JavaHashMap, Cubbie}
 import cc.factorie.{variable, util}
 
 // For single categorical values
@@ -256,6 +256,24 @@ class CategoricalDomain[C] extends DiscreteDomain(0) with IndexedSeq[Categorical
 
 object CategoricalDomain {
   val NULL_INDEX = -1
+
+  implicit def catDomSer[Elem : BytePackable]:BytePackable[CategoricalDomain[Elem]] =
+    new BytePackable[CategoricalDomain[Elem]] {
+      import BytePackable._
+      private val sSeq = seqSer[Elem]
+      def pack(e: CategoricalDomain[Elem]) = {
+        require(e.frozen, "Only frozen domains can be packed to bytes")
+        sSeq pack e.categories
+      }
+
+      def unpack(data: Array[Byte], start: Int) = {
+        val cd = new variable.CategoricalDomain[Elem]
+        val (es, off) = sSeq.unpack(data, start)
+        es foreach cd.value
+        cd.freeze()
+        cd -> off
+      }
+    }
 }
 
 class CategoricalDomainCubbie[T](val cd: CategoricalDomain[T]) extends Cubbie {
