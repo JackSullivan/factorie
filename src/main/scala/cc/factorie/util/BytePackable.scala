@@ -197,7 +197,7 @@ object SerTest {
     val modelFile = new File("/Users/johnsullivan/git/whip/cc/factorie/app/nlp/ner/ConllChainNer.factorie")
     val lexicons = new StaticLexicons()(new File("/Users/johnsullivan/git/whip/src/main/resources/cc/factorie/app/nlp/lexicon"))
     val ner = new ConllChainNer()(modelFile, lexicons)
-    val nerPack = ner.pack
+    val nerPack = pack(ner.ChainNERFeaturesDomain.dimensionDomain) ++ pack(ner.model.parameters)
 
     val oldOs = new BufferedOutputStream(new GZIPOutputStream(new FileOutputStream("oldmodel.factorie")))
     ner.serialize(oldOs)
