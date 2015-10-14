@@ -3,6 +3,7 @@ package cc.factorie.app.nlp.hcoref
 import java.io._
 import scala.io.Source
 import cc.factorie._
+import cc.factorie.util.ISAble._
 import cc.factorie.util.{VectorUtils, EvaluatableClustering, NonValidatingXML}
 import cc.factorie.app.nlp._
 import cc.factorie.app.nlp.pos.OntonotesForwardPosTagger
@@ -43,7 +44,7 @@ object TACCorefWithFactorie {
 
     println("Processing ref mentions and documents: ")
     refMentions.par.foreach{ rMention =>
-      val doc = new Document(map.getDoc(rMention.docId).toIterator.mkString("\n")).setName(rMention.docId)
+      val doc = new Document(lines(map.getDoc(rMention.docId)).mkString("\n")).setName(rMention.docId)
       rMention.doc = Some(doc)
       rMention.getTokenSpan.map(ts => doc.getCoref.addMention(new Phrase(ts))) // we add our gold mentions before coref and processing
       pipeline.process(doc)
@@ -91,7 +92,7 @@ object TACCoref {
     val refMentions = ProcessQueries.loadQueries(evalPath + ".xml", evalPath + ".tab")
 
     val mentions = refMentions.flatMap{ rMention =>
-      val doc = new Document(map.getDoc(rMention.docId).toIterator.mkString("\n")).setName(rMention.docId)
+      val doc = new Document(lines(map.getDoc(rMention.docId)).mkString("\n")).setName(rMention.docId)
       DeterministicNormalizingTokenizer.process(doc)
       DeterministicSentenceSegmenter.process(doc)
       rMention.doc = Some(doc)
@@ -182,13 +183,13 @@ object TACCoref {
  * Takes a docId and returns the raw text of the corresponding document
  */
 trait DocumentMap {
-  def getDoc(docId:String):BufferedReader
+  def getDoc(docId:String):File
 }
 
 class Tac2009FlatDocumentMap(tacRoot:String) extends DocumentMap {
-  def getDoc(docId:String):BufferedReader = {
+  def getDoc(docId:String):File = {
     val filePath = s"$tacRoot/$docId.sgm"
-    new BufferedReader(new FileReader(filePath))
+    new File(filePath)
   }
 }
 
@@ -303,7 +304,7 @@ object GenerateEmbeddings {
     val refMentions = ProcessQueries.loadQueries(evalPath + ".xml", evalPath + ".tab")
 
     val tokens = refMentions.map{ rMention =>
-      val doc = new Document(map.getDoc(rMention.docId).toIterator.mkString("\n")).setName(rMention.docId)
+      val doc = new Document(lines(map.getDoc(rMention.docId)).mkString("\n")).setName(rMention.docId)
       DeterministicNormalizingTokenizer.process(doc)
       DeterministicSentenceSegmenter.process(doc)
       doc.tokens.map(_.lemmaString)

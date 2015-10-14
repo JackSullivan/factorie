@@ -51,30 +51,6 @@ package object factorie extends CubbieConversions {
 
   }
 
-  implicit class BufferedReaderExtras(rdr:BufferedReader) {
-
-    /** Returns an iterator over the lines of the buffered reader's contents.
-      * Consumes the reader and auto-closes. */
-    def toIterator:Iterator[String] = new Iterator[String] {
-      private var nextLine = rdr.readLine()
-
-      def next() = {
-        val res = nextLine
-        nextLine = rdr.readLine()
-        if(nextLine == null) {
-          rdr.close()
-        }
-        res
-      }
-
-      def hasNext = nextLine != null
-    }
-  }
-
-  object sDouble {
-    def unapply(s:String) = s.toDoubleSafe
-  }
-
   def assertStringEquals(expr:Any, str:String) = assert(expr.toString == str, "The string representation '" + expr.toString + "' does not match the expected value: '" + str +"'")
   def assertMinimalAccuracy(got:Double, goal:Double): Unit = assert(got >= goal, s"Accuracy ${got} is less than expected ${goal}.")
   def assertDoubleEquals(got:Double, goal:Double, epsilon:Double): Unit = assert(Math.abs(got-goal) < epsilon, s"Got: $got, expected: $goal")

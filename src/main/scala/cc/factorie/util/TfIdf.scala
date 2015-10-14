@@ -1,7 +1,7 @@
 package cc.factorie.util
 
-import java.io.{FileWriter, BufferedWriter, BufferedReader, FileReader}
-import cc.factorie._
+import java.io._
+import cc.factorie.util.ISAble._
 
 /**
  * Created by johnsullivan on 6/5/15.
@@ -75,9 +75,9 @@ trait Idf {
 
   def idfCounts(c:Corpus):IdfCounts
 
-  def idfFromFile(filePath:String):IdfCounts = new BufferedReader(new FileReader(filePath)).toIterator.map { line =>
-    val Array(term, sDouble(idf)) = line.split(":")
-    term -> idf
+  def idfFromFile(filePath:String):IdfCounts = lines(new File(filePath)).map { line =>
+    val Array(term, idf) = line.split(":")
+    term -> idf.toDouble
   }.toMap
   def idfToFile(idfCounts: IdfCounts, filePath:String): Unit = {
     val wrt = new BufferedWriter(new FileWriter(filePath))
