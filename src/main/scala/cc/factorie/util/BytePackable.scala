@@ -21,6 +21,55 @@ trait BytePackable[Elem] {
   def unpack(data:Array[Byte], start:Int):(Elem, Int)
 }
 
+
+class TensorByte(var b:Byte) {
+  sealed trait IndexType
+  case object ByteType extends IndexType
+  case object ShortType extends IndexType
+  case object IntType extends IndexType
+  case object LongType extends IndexType
+
+  sealed trait Order
+  case object First extends Order
+  case object Second extends Order
+  case object Third extends Order
+  case object Fourth extends Order
+
+  private def binBoolSetter(bool:Boolean, coordMask:Byte): Unit = {
+    if(bool) {
+      b = (b ^ coordMask).toByte
+    } else {
+      b = (b & (0xFF - coordMask)).toByte
+    }
+  }
+
+  def storedDense_=(bool:Boolean): Unit = {binBoolSetter(bool, 0x01)}
+
+  def storedDense = (b & 0x01) != 0
+
+  def origDense_=(bool:Boolean): Unit = {binBoolSetter(bool, 0x02)}
+
+  def origDense = (b & 0x02) != 0
+  def indexType:IndexType = b & 0x0C match {
+    case 0x00 => ByteType
+    case 0x04 => ShortType
+    case 0x08 => IntType
+    case 0x0C => LongType
+  }
+  def orderType:Order = b & 0x30 match {
+    case 0x00 => First
+    case 0x10 => Second
+    case 0x20 => Third
+    case 0x30 => Fourth
+  }
+
+  def binaryTensor_=(bool:Boolean) {binBoolSetter(bool, 0x40)}
+  def binaryTensor = (b & 0x40) != 0
+
+  // very ugly I know
+  def showBits = "%08d".format(Integer.toBinaryString(b).toInt)
+}
+
 object BytePackable {
 
   implicit object StringSer extends BytePackable[String] {
