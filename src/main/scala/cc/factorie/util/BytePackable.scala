@@ -23,17 +23,23 @@ trait BytePackable[Elem] {
 
 
 class TensorByte(var b:Byte) {
-  sealed trait IndexType
-  case object ByteType extends IndexType
-  case object ShortType extends IndexType
-  case object IntType extends IndexType
-  case object LongType extends IndexType
+  sealed trait IndexType {
+    final val mask:Byte = 0x0C
+    def set:Byte
+  }
+  case object ByteType extends IndexType {val set = 0x00}
+  case object ShortType extends IndexType {val set = 0x04}
+  case object IntType extends IndexType {val set = 0x08}
+  case object LongType extends IndexType {val set = 0x0C}
 
-  sealed trait Order
-  case object First extends Order
-  case object Second extends Order
-  case object Third extends Order
-  case object Fourth extends Order
+  sealed trait Order {
+    final val mask:Byte = 0x30
+    def set:Byte
+  }
+  case object First extends Order {val set = 0x00}
+  case object Second extends Order {val set = 0x10}
+  case object Third extends Order {val set = 0x20}
+  case object Fourth extends Order {val set = 0x30}
 
   private def binBoolSetter(bool:Boolean, coordMask:Byte): Unit = {
     if(bool) {
@@ -50,12 +56,22 @@ class TensorByte(var b:Byte) {
   def origDense_=(bool:Boolean): Unit = {binBoolSetter(bool, 0x02)}
 
   def origDense = (b & 0x02) != 0
+
+  def indexType_=(indexType:IndexType): Unit = {
+    b = (b ^ (0xFF - indexType.mask) + indexType.set).toByte
+  }
+
   def indexType:IndexType = b & 0x0C match {
     case 0x00 => ByteType
     case 0x04 => ShortType
     case 0x08 => IntType
     case 0x0C => LongType
   }
+
+  def orderType_=(orderType:Order): Unit = {
+    b = (b ^ (0xFF - orderType.mask) + orderType.set).toByte
+  }
+
   def orderType:Order = b & 0x30 match {
     case 0x00 => First
     case 0x10 => Second
