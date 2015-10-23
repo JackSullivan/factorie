@@ -22,7 +22,7 @@ trait BytePackable[Elem] {
 }
 
 
-class TensorByte(var b:Byte) {
+object TensorByte {
   sealed trait IndexType {
     final val mask:Byte = 0x0C
     def set:Byte
@@ -40,6 +40,12 @@ class TensorByte(var b:Byte) {
   case object Second extends Order {val set = 0x10}
   case object Third extends Order {val set = 0x20}
   case object Fourth extends Order {val set = 0x30}
+}
+
+class TensorByte(var b:Byte) {
+  def this() = this(0)
+  import TensorByte._
+
 
   private def binBoolSetter(bool:Boolean, coordMask:Byte): Unit = {
     if(bool) {
@@ -84,6 +90,12 @@ class TensorByte(var b:Byte) {
 
   // very ugly I know
   def showBits = "%08d".format(Integer.toBinaryString(b).toInt)
+
+  override def equals(o:Any) = o match {
+    case ob:AnyRef if this eq ob => true
+    case that:TensorByte => this.b == that.b
+    case _ => false
+  }
 }
 
 object BytePackable {

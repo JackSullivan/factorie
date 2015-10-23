@@ -149,6 +149,23 @@ trait ReadOnlyTensor extends Tensor {
 object Tensor {
 
   implicit object TensorSer extends BytePackable[Tensor] {
+
+    def pack2(t:Tensor) = {
+      val tb = new TensorByte(0)
+      tb.origDense = t.isDense
+      tb.orderType = t match {
+        case _:Tensor1 => TensorByte.First
+        case _:Tensor2 => TensorByte.Second
+        case _:Tensor3 => TensorByte.Third
+        case _:Tensor4 => TensorByte.Fourth
+      }
+      tb.binaryTensor = t match {
+        case _:SparseBinaryTensor => true // todo check that this is correct
+        case _ => false
+      }
+
+    }
+
     def pack(e: Tensor) = e.getClass match {
       case c if c == classOf[DenseTensor1] =>
         DenseTensor1.DenseTensor1Ser.pack(e.asInstanceOf[DenseTensor1])
